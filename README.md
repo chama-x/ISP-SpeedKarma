@@ -8,12 +8,9 @@ Make your ISP behave. SpeedKarma learns your network’s rhythms, then nudges tr
 - **Stays stealthy**: can disguise app traffic to look like speedtest flows when needed
 - **Lives in your tray**: fast toggles, gentle notifications, no drama
 
-### Screenshot vibes
-Drop your screenshots here once you’re ready.
+### Screenshots
+<img width="614" height="300" alt="CleanShot 2025-08-11 at 8  21 10@2x" src="https://github.com/user-attachments/assets/17b6dd3b-b6f8-4b36-866e-55685c1d43ff" />
 
-![Main window placeholder](docs/images/screenshot-main.png)
-
-![Tray menu placeholder](docs/images/screenshot-tray.png)
 
 
 ## Highlights
