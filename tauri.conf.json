@@ -4,7 +4,7 @@
     "beforeBuildCommand": "",
     "devPath": "dist",
     "distDir": "dist",
-    "withGlobalTauri": false
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "ISP-SpeedKarma",
@@ -70,9 +70,9 @@
         "fullscreen": false,
         "resizable": true,
         "title": "ISP-SpeedKarma",
-        "width": 400,
+        "width": 520,
         "height": 600,
-        "visible": false
+        "visible": true
       }
     ]
   }

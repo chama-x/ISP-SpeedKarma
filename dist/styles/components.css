@@ -1,0 +1,170 @@
+@import url('./tokens.css');
+
+.panel {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-12);
+  padding: var(--space-14);
+  width: min(420px, 90vw);
+  background: var(--surface);
+  border-radius: var(--radius-16);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.status .title {
+  font-weight: 600;
+}
+
+.status .subtext {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-12);
+}
+
+.tile {
+  position: relative;
+  border-radius: var(--radius-14);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  min-height: 112px;
+  padding: var(--space-12);
+  cursor: pointer;
+  transition: transform .15s ease, background .2s ease, border-color .2s ease;
+}
+
+.tile:hover {
+  transform: translateY(-1px);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tile .label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: var(--space-8);
+}
+
+.toggle {
+  display: grid;
+  place-items: center;
+  height: 176px;
+  grid-column: span 2;
+  border-radius: var(--radius-16);
+}
+
+.toggle .circle {
+  width: 156px;
+  height: 156px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  background: radial-gradient(120px 120px at 50% 45%, rgba(255,255,255,.06), rgba(255,255,255,.02) 70%);
+  transition: box-shadow .25s ease, transform .2s ease, background .25s ease;
+}
+
+.toggle[data-phase] .circle {
+  position: relative;
+}
+
+.toggle .ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--progress, 0) * 1%), transparent 0);
+  mask: radial-gradient(circle calc(50% - 7px), transparent 99%, black 100%);
+  opacity: .9;
+}
+
+.toggle[data-phase="optimizing"] .ring {
+  animation: breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: .45; }
+  50% { opacity: .9; }
+}
+
+.toggle[data-on="true"] .circle {
+  box-shadow: 0 0 0 10px var(--accent-weak), inset 0 0 0 1px var(--border);
+  background: radial-gradient(120px 120px at 50% 45%, color-mix(in oklab, var(--accent) 30%, transparent), rgba(255,255,255,.03) 70%);
+}
+
+.toggle .glyph {
+  width: 68px; height: 68px;
+  color: var(--text);
+}
+
+.metrics {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: var(--space-8);
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-12);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: rgba(255,255,255,.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .toggle .circle { transition: none; }
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-12);
+  padding: 8px 12px;
+  box-shadow: var(--shadow-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+}
+
+.toast.show {
+  opacity: 1;
+}
+

@@ -1,6 +1,8 @@
 use crate::core::error::{Result, SpeedKarmaError};
 use crate::core::intelligence::{SystemStatus, SystemState};
+use crate::core::app_state::{OptimizationMode};
 use crate::ui::advanced::AdvancedInterface;
+use crate::ui::panel::PanelInterface;
 use tauri::{
     AppHandle, CustomMenuItem, Manager, SystemTray as TauriSystemTray, 
     SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
@@ -63,7 +65,7 @@ impl SystemTray {
         let status_item = CustomMenuItem::new(&menu_items.status_item, "◉ SpeedKarma")
             .disabled(); // Status item is non-clickable
         
-        let toggle_optimization = CustomMenuItem::new(&menu_items.toggle_optimization, "○ Enable optimization");
+        let toggle_optimization = CustomMenuItem::new(&menu_items.toggle_optimization, "Enable Optimization");
         let advanced = CustomMenuItem::new(&menu_items.advanced, "Advanced...");
         let quit = CustomMenuItem::new(&menu_items.quit, "Quit SpeedKarma");
         
@@ -157,19 +159,19 @@ impl SystemTray {
                 .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to update status item: {}", e)))?;
             
             // Update optimization toggle based on state
-            let (toggle_text, toggle_enabled) = match status.state {
+            let (toggle_text, toggle_enabled, toggle_selected) = match status.state {
                 SystemState::Learning => {
                     if let Some(progress) = &status.data_collection_progress {
-                        let remaining = progress.days_needed - progress.days_collected;
-                        (format!("○ Enable optimization\n   (Available in {} days)", remaining), false)
+                        let _remaining = progress.days_needed - progress.days_collected;
+                        ("Enable Optimization".to_string(), false, false)
                     } else {
-                        ("○ Enable optimization\n   (Learning patterns...)".to_string(), false)
+                        ("Enable Optimization".to_string(), false, false)
                     }
                 }
-                SystemState::Optimizing => ("● Disable optimization".to_string(), true),
-                SystemState::Monitoring => ("○ Enable optimization".to_string(), true),
-                SystemState::Inactive => ("○ Enable optimization".to_string(), true),
-                SystemState::Error(_) => ("○ Enable optimization\n   (Error - check logs)".to_string(), false),
+                SystemState::Optimizing => ("Disable Optimization".to_string(), true, true),
+                SystemState::Monitoring => ("Enable Optimization".to_string(), true, false),
+                SystemState::Inactive => ("Enable Optimization".to_string(), true, false),
+                SystemState::Error(_) => ("Enable Optimization".to_string(), false, false),
             };
             
             let toggle_item = tray_handle.get_item(&self.menu_items.toggle_optimization);
@@ -183,6 +185,9 @@ impl SystemTray {
                 toggle_item.set_enabled(false)
                     .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to disable toggle: {}", e)))?;
             }
+
+            // Reflect selected state where supported (macOS checkmark)
+            let _ = toggle_item.set_selected(toggle_selected);
         }
         
         Ok(())
@@ -193,23 +198,27 @@ impl SystemTray {
         match status.state {
             SystemState::Learning => {
                 if let Some(progress) = &status.data_collection_progress {
-                    format!("◉ SpeedKarma\nLearning patterns ({} of {} days)", 
-                           progress.days_collected, progress.days_needed)
+                    format!(
+                        "◉ SpeedKarma — Learning patterns ({} of {} days)",
+                        progress.days_collected, progress.days_needed
+                    )
                 } else {
-                    "◉ SpeedKarma\nLearning patterns".to_string()
+                    "◉ SpeedKarma — Learning patterns".to_string()
                 }
             }
             SystemState::Optimizing => {
                 if let Some(effectiveness) = &status.effectiveness {
-                    format!("◉ SpeedKarma\nOptimizing ({}x improvement)", 
-                           effectiveness.improvement_factor)
+                    format!(
+                        "◉ SpeedKarma — Optimizing ({}x)",
+                        effectiveness.improvement_factor
+                    )
                 } else {
-                    "◉ SpeedKarma\nOptimizing".to_string()
+                    "◉ SpeedKarma — Optimizing".to_string()
                 }
             }
-            SystemState::Monitoring => "◉ SpeedKarma\nMonitoring".to_string(),
-            SystemState::Inactive => "◉ SpeedKarma\nInactive".to_string(),
-            SystemState::Error(ref err) => format!("◉ SpeedKarma\nError: {}", err),
+            SystemState::Monitoring => "◉ SpeedKarma — Monitoring".to_string(),
+            SystemState::Inactive => "◉ SpeedKarma — Inactive".to_string(),
+            SystemState::Error(ref err) => format!("◉ SpeedKarma — Error: {}", err),
         }
     }
     
@@ -261,10 +270,15 @@ impl SystemTray {
     /// Handles system tray events
     pub async fn handle_tray_event(&self, event: SystemTrayEvent) -> Result<()> {
         match event {
-            SystemTrayEvent::LeftClick { position: _, size: _, .. } => {
-                debug!("Tray left-clicked - showing menu");
-                // On macOS, left click typically shows the menu
-                // This is handled automatically by Tauri
+            SystemTrayEvent::LeftClick { position, size: _, .. } => {
+                debug!("Tray left-clicked - toggling popover panel");
+                if let Some(app_handle) = &self.app_handle {
+                    let x = position.x as f64;
+                    let y = position.y as f64;
+                    if let Err(e) = PanelInterface::toggle_at_tray_position(app_handle, x, y) {
+                        tracing::warn!("Failed to toggle panel: {}", e);
+                    }
+                }
             }
             SystemTrayEvent::RightClick { position: _, size: _, .. } => {
                 debug!("Tray right-clicked - showing context menu");
@@ -333,12 +347,20 @@ impl SystemTray {
             SystemState::Optimizing => {
                 info!("Disabling optimization");
                 self.show_notification("SpeedKarma", "Optimization disabled").await?;
-                // TODO: Send disable command to optimization engine
+                if let Some(app_handle) = &self.app_handle {
+                    let state = app_handle.state::<crate::core::app_state::SharedAppState>();
+                    let mut guard = state.write().await;
+                    guard.optimization_mode = OptimizationMode::Disabled;
+                }
             }
             SystemState::Monitoring | SystemState::Inactive => {
                 info!("Enabling optimization");
                 self.show_notification("SpeedKarma", "Optimization enabled").await?;
-                // TODO: Send enable command to optimization engine
+                if let Some(app_handle) = &self.app_handle {
+                    let state = app_handle.state::<crate::core::app_state::SharedAppState>();
+                    let mut guard = state.write().await;
+                    guard.optimization_mode = OptimizationMode::Enabled;
+                }
             }
             SystemState::Learning => {
                 warn!("Cannot toggle optimization while learning");
@@ -354,7 +376,7 @@ impl SystemTray {
     }
     
     /// Shows the advanced interface
-    async fn show_advanced_interface(&self) -> Result<()> {
+    pub async fn show_advanced_interface(&self) -> Result<()> {
         info!("Showing advanced interface");
         
         if let Some(app_handle) = &self.app_handle {

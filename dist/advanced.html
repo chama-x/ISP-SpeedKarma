@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advanced — SpeedKarma</title>
+    <link rel="stylesheet" href="styles/tokens.css" />
+    <style>
+      html,body{ margin:0; height:100%; background:var(--bg); color:var(--text); font-family:var(--font-sans) }
+      .wrap{ padding:20px 22px }
+      h1{ margin:0 0 14px; font-size:20px }
+      section{ background:var(--surface); border-radius:14px; padding:16px; margin-bottom:14px; border:1px solid var(--border); backdrop-filter:saturate(180%) blur(16px); }
+      h2{ margin:0 0 10px; font-size:14px; letter-spacing:.3px; color:var(--muted) }
+      label{ display:block; font-size:13px; margin:6px 0 4px; color:var(--muted) }
+      input, textarea, select{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text) }
+      .row{ display:flex; gap:10px; flex-wrap:wrap }
+      .btn{ padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer }
+      .btn:hover{ background:rgba(255,255,255,.06) }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Advanced Settings</h1>
+      <section>
+        <h2>Optimization</h2>
+        <label>Minimum data days before enabling</label>
+        <input id="minDays" type="number" min="0" step="1" />
+      </section>
+      <section>
+        <h2>Throughput Keeper</h2>
+        <div class="row">
+          <label style="flex:1 1 auto">Enabled</label>
+          <input id="keeperEnabled" type="checkbox" style="width:auto" />
+        </div>
+        <div class="row">
+          <div style="flex:1 1 50%">
+            <label>Base interval (s)</label>
+            <input id="keeperInterval" type="number" min="1" step="1" />
+          </div>
+          <div style="flex:1 1 50%">
+            <label>Hourly budget (MB)</label>
+            <input id="keeperBudget" type="number" min="1" step="1" />
+          </div>
+        </div>
+        <label>Burst sizes (KB, comma-separated)</label>
+        <input id="keeperSizes" type="text" placeholder="64,128,256" />
+        <div class="subtext" style="margin-top:6px;color:var(--muted)">Projected usage depends on cadence and sizes. Keeper sends tiny randomized pulses to keep throughput from collapsing.</div>
+        <div class="row" style="margin-top:8px">
+          <button id="saveKeeper" class="btn">Save Keeper Settings</button>
+        </div>
+      </section>
+      <section>
+        <h2>Servers</h2>
+        <label>Custom servers (one per line)</label>
+        <textarea id="servers" rows="4" placeholder="host1:port\nhost2:port"></textarea>
+        <div class="row"><button id="saveServers" class="btn">Save Servers</button></div>
+      </section>
+      <section>
+        <h2>Config</h2>
+        <div class="row">
+          <button id="export" class="btn">Export Config</button>
+          <button id="import" class="btn">Import Config</button>
+        </div>
+      </section>
+      <section>
+        <h2>Speedtest & Disguise</h2>
+        <div class="row">
+          <button id="runSpeedtest" class="btn">Run Speedtest Now</button>
+          <button id="toggleDisguise" class="btn">Toggle Disguise</button>
+        </div>
+      </section>
+    </div>
+    <script>
+      const { invoke } = window.__TAURI__.tauri;
+      const readText = async ()=> (navigator.clipboard && navigator.clipboard.readText) ? navigator.clipboard.readText() : null;
+      const writeText = async (t)=> (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t) : null;
+      const $ = s=>document.querySelector(s);
+      async function load(){
+        const cfg = await invoke("get_config");
+        $("#minDays").value = cfg.auto_optimization.min_data_days ?? 7;
+        $("#servers").value = (cfg.advanced.custom_servers||[]).join("\n");
+        const keeper = cfg.advanced.throughput_keeper || {};
+        $("#keeperEnabled").checked = !!keeper.enabled;
+        $("#keeperInterval").value = keeper.burst_interval_seconds ?? 5;
+        $("#keeperBudget").value = keeper.hourly_budget_mb ?? 30;
+        $("#keeperSizes").value = (keeper.burst_sizes_kb||[64,128,256]).join(",");
+        $("#toggleDisguise").textContent = (cfg.advanced.disguise_mode?.enabled ? 'Disable Disguise' : 'Enable Disguise');
+      }
+      $("#minDays").addEventListener("change", async e=>{
+        const days = parseInt(e.target.value||"7",10);
+        await invoke("set_min_data_days", { days });
+      });
+      $("#saveServers").addEventListener("click", async ()=>{
+        const list = $("#servers").value.split("\n").map(s=>s.trim()).filter(Boolean);
+        await invoke("set_custom_servers", { servers: list });
+      });
+      $("#saveKeeper").addEventListener("click", async ()=>{
+        const enabled = $("#keeperEnabled").checked;
+        const interval = parseInt($("#keeperInterval").value||"5",10);
+        const budget = parseFloat($("#keeperBudget").value||"30");
+        const sizes = $("#keeperSizes").value.split(",").map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n));
+        await invoke("set_throughput_keeper", {
+          cfg: {
+            enabled,
+            burst_interval_seconds: interval,
+            burst_sizes_kb: sizes,
+            hourly_budget_mb: budget,
+            tighten_threshold_drop: 0.15,
+            relax_threshold_stability_s: 60,
+            quiet_hours: null,
+          }
+        });
+      });
+      $("#export").addEventListener("click", async ()=>{
+        const json = await invoke("export_config");
+        try { await writeText(json) } catch {}
+      });
+      $("#import").addEventListener("click", async ()=>{
+        const txt = await readText().catch(()=>null);
+        if(txt){ await invoke("import_config", { json: txt }); await load(); }
+      });
+      $("#runSpeedtest").addEventListener("click", async ()=>{ await invoke("run_speedtest_once"); });
+      $("#toggleDisguise").addEventListener("click", async (e)=>{
+        const on = e.target.textContent.includes('Enable');
+        await invoke("set_disguise_mode", { enabled: on });
+        e.target.textContent = on ? 'Disable Disguise' : 'Enable Disguise';
+      });
+      load();
+    </script>
+  </body>
+  </html>
+
+

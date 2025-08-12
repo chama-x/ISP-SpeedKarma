@@ -77,6 +77,18 @@ pub struct AdvancedConfig {
     
     /// Traffic pattern customization
     pub traffic_patterns: TrafficPatternConfig,
+
+    /// Throughput keeper configuration
+    #[serde(default)]
+    pub throughput_keeper: ThroughputKeeperConfig,
+
+    /// Full speedtest runner configuration
+    #[serde(default)]
+    pub speedtest_runner: SpeedtestRunnerConfig,
+
+    /// Global disguise mode (mimic speedtest for app traffic)
+    #[serde(default)]
+    pub disguise_mode: DisguiseModeConfig,
 }
 
 /// Legal and compliance configuration
@@ -109,6 +121,70 @@ pub struct TrafficPatternConfig {
     pub intensity: f64,
 }
 
+/// Throughput keeper configuration (adaptive micro-bursts to keep throughput warm)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThroughputKeeperConfig {
+    /// Enable the throughput keeper feature
+    pub enabled: bool,
+
+    /// Base interval between bursts in seconds (adaptive)
+    pub burst_interval_seconds: u64,
+
+    /// Allowed burst sizes in KB (picker will adapt among these)
+    pub burst_sizes_kb: Vec<u32>,
+
+    /// Hourly data budget for keeper traffic in MB
+    pub hourly_budget_mb: f64,
+
+    /// Tighten cadence if drop over this threshold (fraction, e.g. 0.15 = 15%)
+    pub tighten_threshold_drop: f64,
+
+    /// Time of stability required to relax cadence (seconds)
+    pub relax_threshold_stability_s: u32,
+
+    /// Optional quiet hours (0-23). If set, keeper is disabled when current hour is not allowed
+    pub quiet_hours: Option<Vec<u8>>,
+}
+
+impl Default for ThroughputKeeperConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            burst_interval_seconds: 5,
+            burst_sizes_kb: vec![64, 128, 256],
+            hourly_budget_mb: 30.0,
+            tighten_threshold_drop: 0.15,
+            relax_threshold_stability_s: 60,
+            quiet_hours: None,
+        }
+    }
+}
+
+/// Full bandwidth speedtest runner configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeedtestRunnerConfig {
+    pub enabled: bool,
+    pub download_duration_s: u32,
+    pub upload_duration_s: u32,
+    pub parallel_connections: u8,
+}
+
+impl Default for SpeedtestRunnerConfig {
+    fn default() -> Self {
+        Self { enabled: true, download_duration_s: 10, upload_duration_s: 10, parallel_connections: 4 }
+    }
+}
+
+/// Disguise mode configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisguiseModeConfig {
+    pub enabled: bool,
+}
+
+impl Default for DisguiseModeConfig {
+    fn default() -> Self { Self { enabled: false } }
+}
+
 impl Default for AppConfig {
     /// Intelligent defaults following Apple's "it just works" philosophy
     fn default() -> Self {
@@ -139,6 +215,9 @@ impl Default for AppConfig {
                     connection_count: 3,
                     intensity: 0.5,
                 },
+                throughput_keeper: ThroughputKeeperConfig::default(),
+                speedtest_runner: SpeedtestRunnerConfig::default(),
+                disguise_mode: DisguiseModeConfig::default(),
             },
             legal: LegalConfig {
                 terms_accepted: false,
@@ -213,6 +292,12 @@ impl AppConfig {
         if self.monitoring.max_bandwidth_per_hour <= 0.0 {
             return Err(SpeedKarmaError::ConfigurationError(
                 "Bandwidth limit must be positive".to_string()
+            ));
+        }
+        // Validate throughput keeper
+        if self.advanced.throughput_keeper.hourly_budget_mb < 0.0 {
+            return Err(SpeedKarmaError::ConfigurationError(
+                "Throughput keeper hourly budget must be non-negative".to_string()
             ));
         }
         // Legal: nothing to validate beyond boolean

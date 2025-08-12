@@ -357,6 +357,20 @@ impl DefaultIntelligenceCore {
         }
     }
 
+    /// Creates a core with a custom minimum learning days value
+    pub fn with_min_learning_days(repository: Arc<Repository>, min_learning_days: u32) -> Self {
+        Self {
+            repository,
+            learning_model: PatternLearningModel::default(),
+            min_learning_days,
+        }
+    }
+
+    /// Updates the minimum learning days at runtime
+    pub fn set_min_learning_days(&mut self, days: u32) {
+        self.min_learning_days = days;
+    }
+
     /// Perform comprehensive effectiveness analysis
     pub async fn analyze_effectiveness(&self) -> Result<EffectivenessAnalysis> {
         let since = Utc::now() - Duration::days(30);
@@ -1197,6 +1211,11 @@ impl DecisionEngine {
             intelligence,
             min_training_interval_minutes: 15,
         }
+    }
+
+    /// Allows configuring minimum learning days used by the intelligence core
+    pub fn set_min_learning_days(&mut self, days: u32) {
+        self.intelligence.set_min_learning_days(days);
     }
 
     /// Runs periodically: trains model and logs decision outcome
