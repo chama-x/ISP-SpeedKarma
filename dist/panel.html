@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SpeedKarma Panel</title>
+    <link rel="stylesheet" href="styles/tokens.css" />
+    <link rel="stylesheet" href="styles/components.css" />
+  </head>
+  <body>
+    <main class="panel" role="dialog" aria-label="SpeedKarma Control Panel">
+      <header class="panel-header">
+        <div class="status" aria-live="polite">
+          <div class="title">SpeedKarma</div>
+          <div class="subtext" id="statusSub">Initializing…</div>
+        </div>
+        <button id="advancedBtn" class="btn" aria-label="Open Advanced Settings">Advanced…</button>
+      </header>
+
+      <section class="grid">
+        <div id="toggle" class="tile toggle" role="button" tabindex="0" aria-pressed="false" data-on="false" data-phase="inactive">
+          <div class="circle" aria-hidden="true">
+            <div class="ring" aria-hidden="true"></div>
+            <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <circle cx="12" cy="12" r="9" opacity=".4"/>
+              <path d="M12 7v10"/>
+            </svg>
+          </div>
+          <div class="metrics" id="metrics">Optimization: Disabled</div>
+        </div>
+
+        <div id="serversTile" class="tile" role="button" tabindex="0" aria-label="Servers">
+          <div class="label">Servers</div>
+          <div>Fastest server</div>
+          <div class="subtext" style="margin-top:6px;">Auto-select best route</div>
+        </div>
+
+        <div id="insightsTile" class="tile" role="button" tabindex="0" aria-label="Insights">
+          <div class="label">Insights</div>
+          <div id="insightText">No recent data</div>
+        </div>
+        <div id="boosterTile" class="tile" aria-label="Booster status" tabindex="0">
+          <div class="label">Booster</div>
+          <div id="boosterLine">inactive</div>
+          <div class="subtext" id="boosterSub" style="margin-top:6px;color:var(--muted)">—</div>
+        </div>
+        <div id="speedtestTile" class="tile" role="button" tabindex="0" aria-label="Run Speedtest">
+          <div class="label">Speedtest</div>
+          <div id="speedtestLine">Tap to run full-bandwidth test</div>
+          <div class="subtext" id="speedtestSub" style="margin-top:6px;color:var(--muted)">—</div>
+        </div>
+        <div id="disguiseTile" class="tile" role="button" tabindex="0" aria-label="Disguise Mode">
+          <div class="label">Disguise</div>
+          <div id="disguiseLine">Off</div>
+          <div class="subtext" id="disguiseSub" style="margin-top:6px;color:var(--muted)">Mimic speedtest.net headers for app traffic</div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <button id="quitBtn" class="btn">Quit</button>
+      </footer>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script>
+      const { invoke } = window.__TAURI__.tauri || {};
+      const { listen } = window.__TAURI__?.event || {};
+      const appWindow = (window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.appWindow) ? window.__TAURI__.window.appWindow : null;
+      const $ = (s)=>document.querySelector(s);
+      const onKey = (el, handler)=>{
+        el.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); handler(); }
+        });
+      };
+      const toast = document.getElementById('toast');
+      let toastTimer = null;
+      function showToast(msg){
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(()=> toast.classList.remove('show'), 1800);
+      }
+      async function refresh(){
+        if(!invoke){ return; }
+        const st = await invoke("get_optimization_state").catch(()=>({ mode: "Disabled", text:"Learning patterns" }));
+        const status = await invoke("get_system_status").catch(()=>null);
+        const enabled = st.mode === "Enabled";
+        const toggle = $("#toggle");
+        toggle.dataset.on = String(enabled);
+        toggle.setAttribute('aria-pressed', String(enabled));
+        let metrics = "Optimization: Disabled";
+        let sub = st.text ?? "Monitoring";
+        if (enabled && status && status.effectiveness) {
+          const eff = status.effectiveness;
+          metrics = `Optimization: Enabled — ${eff.improvement_factor.toFixed(1)}×`;
+          sub = `Baseline ${eff.baseline_speed.toFixed(1)} Mbps → ${eff.optimized_speed.toFixed(1)} Mbps`;
+          $("#insightText").textContent = `${Math.round(eff.confidence*100)}% confidence · Updated just now`;
+        } else if (!enabled && status && status.data_collection_progress) {
+          const p = status.data_collection_progress;
+          metrics = `Optimization: Disabled — Learning ${p.days_collected}/${p.days_needed} days`;
+          $("#insightText").textContent = `Learning… ${p.progress_percentage.toFixed(0)}%`;
+        } else {
+          $("#insightText").textContent = `No recent data`;
+        }
+        $("#metrics").textContent = metrics;
+        $("#statusSub").textContent = sub;
+      }
+      const handleToggle = async ()=>{ if(!invoke) return; await invoke("toggle_optimization"); await refresh(); showToast('Toggled optimization'); };
+      $("#toggle").addEventListener('click', handleToggle);
+      onKey($("#toggle"), handleToggle);
+      $("#advancedBtn").addEventListener('click', ()=> invoke && invoke('open_advanced'));
+      $("#serversTile").addEventListener('click', ()=> invoke && invoke('open_advanced'));
+      $("#insightsTile").addEventListener('click', ()=> invoke && invoke('open_advanced'));
+      $("#speedtestTile").addEventListener('click', ()=> invoke && invoke('run_speedtest_once'));
+      $("#disguiseTile").addEventListener('click', async ()=>{
+        if(!invoke) return; const on = $("#disguiseLine").textContent !== 'On';
+        await invoke('set_disguise_mode', { enabled: on });
+        $("#disguiseLine").textContent = on ? 'On' : 'Off';
+        showToast(`Disguise ${on ? 'enabled' : 'disabled'}`);
+      });
+      $("#quitBtn").addEventListener('click', ()=> invoke && invoke('quit_app'));
+      window.addEventListener('keydown', (e)=>{
+        if(e.key === 'Escape' && appWindow){ appWindow.hide(); }
+      });
+      // Live progress events
+      if(listen){
+        listen('optimization_progress', ({ payload })=>{
+          const t = document.getElementById('toggle');
+          if(!payload || !t) return;
+          const phase = payload.phase || 'inactive';
+          t.dataset.phase = String(phase);
+          t.style.setProperty('--progress', (payload.phase_percent || 0));
+          if(phase === 'optimizing'){ t.style.setProperty('--progress', 100); }
+          const insight = document.getElementById('insightText');
+          if(insight && payload.metrics){
+            const down = (payload.metrics.down_mbps ?? 0).toFixed(1);
+            const up = (payload.metrics.up_mbps ?? 0).toFixed(1);
+            insight.textContent = `${down}↓  ${up}↑  · next switch ${payload.next_rotation_s}s`;
+          }
+          const m = document.getElementById('metrics');
+          if(m && payload.metrics && payload.metrics.improvement){
+            m.textContent = `Optimization: Enabled — ${payload.metrics.improvement.toFixed(1)}×`;
+          }
+        });
+        listen('keeper_progress', ({ payload })=>{
+          const el = document.getElementById('boosterLine');
+          const sub = document.getElementById('boosterSub');
+          if(!el) return;
+          const next = payload?.next_burst_in_s ?? 0;
+          const kb = payload?.last_burst_kb ?? 0;
+          const used = payload?.hour_used_mb ?? 0;
+          const budget = payload?.hour_budget_mb ?? 0;
+          const cadence = (payload?.cadence || 'suspended');
+          if(kb>0 && next>0){
+            el.textContent = `pulses ${next}s · ${kb} KB · next ${next}s`;
+          } else {
+            el.textContent = `pulses paused`;
+          }
+          if(sub){ sub.textContent = `used ${used.toFixed(2)} / ${budget.toFixed(0)} MB/hr · ${cadence}`; }
+        });
+        listen('speedtest_progress', ({ payload })=>{
+          const line = document.getElementById('speedtestLine');
+          const sub = document.getElementById('speedtestSub');
+          if(!line) return;
+          const phase = payload?.phase || 'idle';
+          const t = payload?.elapsed_s || 0;
+          line.textContent = phase === 'done' ? 'Completed' : `${phase}… ${t}s`;
+          if(sub){ sub.textContent = 'Running at full bandwidth'; }
+        });
+      }
+      refresh();
+    </script>
+  </body>
+</html>
+
+

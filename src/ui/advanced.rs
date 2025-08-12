@@ -24,7 +24,7 @@ impl AdvancedInterface {
         tauri::WindowBuilder::new(
             app_handle,
             "advanced",
-            WindowUrl::App("index.html".into()),
+            WindowUrl::App("advanced.html".into()),
         )
         .title("SpeedKarma — Advanced Settings")
         .resizable(true)

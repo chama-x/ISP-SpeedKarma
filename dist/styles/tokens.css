@@ -1,0 +1,69 @@
+:root {
+  color-scheme: light dark;
+  --font-sans: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+  /* Accent (teal by default; tuned for macOS look) */
+  --accent-h: 162;
+  --accent-s: 68%;
+  --accent-l: 48%;
+  --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+  --accent-weak: hsla(var(--accent-h), calc(var(--accent-s) - 20%), calc(var(--accent-l) + 12%), 0.28);
+
+  /* Radii */
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+
+  /* Shadows */
+  --shadow-1: 0 8px 24px rgba(0,0,0,.18);
+  --shadow-2: 0 20px 44px rgba(0,0,0,.28);
+
+  /* Surfaces (dark defaults) */
+  --bg: #0f0f10;
+  --surface: rgba(30, 30, 32, 0.72);
+  --surface-2: rgba(38, 38, 40, 0.64);
+  --border: rgba(255,255,255,.08);
+  --text: #eaeaea;
+  --muted: #9a9aa1;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f7f9;
+    --surface: rgba(255,255,255,0.78);
+    --surface-2: rgba(255,255,255,0.64);
+    --border: rgba(0,0,0,.08);
+    --text: #0e0e10;
+    --muted: #6a6a71;
+    --accent-l: 42%;
+  }
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background: transparent; /* popovers use vibrancy */
+  color: var(--text);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden; clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap; clip-path: inset(50%);
+}
+
