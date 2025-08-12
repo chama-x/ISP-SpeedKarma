@@ -40,3 +40,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "isp-speedkarma"
 path = "src/main.rs"
+
+[features]
+# Required by cargo-tauri v1 to enable the embedded handler
+custom-protocol = ["tauri/custom-protocol"]

@@ -18,8 +18,8 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
+      - name: Install Tauri CLI v1
+        run: cargo install tauri-cli --locked --version ^1
       - name: Build
         run: cargo tauri build
       - name: Upload artifacts
