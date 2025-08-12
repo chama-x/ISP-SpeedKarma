@@ -1,0 +1,42 @@
+[package]
+name = "isp-speedkarma"
+version = "0.1.0"
+edition = "2021"
+authors = ["SpeedKarma Team"]
+description = "Intelligent ISP bandwidth optimization through speedtest server connections"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls", "migrate", "chrono"], default-features = false }
+tauri = { version = "1.0", features = ["system-tray", "fs-create-dir", "fs-exists", "fs-read-dir", "fs-read-file", "fs-remove-dir", "fs-remove-file", "fs-write-file", "notification-all", "os-all", "path-all", "shell-open"] }
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dirs = "5.0"
+serde_json = "1.0"
+# Network monitoring dependencies
+netstat2 = "0.9"
+sysinfo = "0.30"
+# For network interface monitoring
+pnet = "0.34"
+# Random number generation for stealth operations
+rand = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[build-dependencies]
+tauri-build = { version = "1.0", features = [] }
+
+[lib]
+name = "isp_speedkarma"
+path = "src/lib.rs"
+
+[[bin]]
+name = "isp-speedkarma"
+path = "src/main.rs"
