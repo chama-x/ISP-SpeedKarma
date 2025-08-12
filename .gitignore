@@ -1,3 +1,41 @@
-/.kiro
-/.vscode
-target/
+.kiro/
+.vscode/
+.idea/
+.fleet/
+
+# OS
+.DS_Store
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+*.orig
+
+# Coverage artifacts
+coverage/
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node (frontends or tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri (if applicable)
+src-tauri/target/
