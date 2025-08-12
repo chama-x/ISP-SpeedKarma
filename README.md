@@ -9,7 +9,7 @@ Make your ISP behave. SpeedKarma learns your network’s rhythms, then nudges tr
 - **Lives in your tray**: fast toggles, gentle notifications, no drama
 
 ### Screenshots
-<img width="614" height="300" alt="CleanShot 2025-08-11 at 8  21 10@2x" src="https://github.com/user-attachments/assets/17b6dd3b-b6f8-4b36-866e-55685c1d43ff" />
+<img width="868" height="862" alt="CleanShot 2025-08-13 at 12  45 10@2x" src="https://github.com/user-attachments/assets/ee27457a-ea4c-4ad3-a75c-e26a7d4ce902" />
 
 
 
