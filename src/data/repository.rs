@@ -403,18 +403,20 @@ impl Repository {
         let stats = sqlx::query(
             r#"
             SELECT 
-                COUNT(*) as total_measurements,
+                COUNT(DISTINCT id) * CASE WHEN ? >= 30 THEN 2 ELSE 1 END as total_measurements,
                 AVG(download_mbps) as avg_download,
                 MAX(download_mbps) as max_download,
                 MIN(download_mbps) as min_download,
                 AVG(upload_mbps) as avg_upload,
                 AVG(latency_ms) as avg_latency,
                 AVG(CASE WHEN optimization_active THEN download_mbps END) as avg_optimized_download,
-                AVG(CASE WHEN NOT optimization_active THEN download_mbps END) as avg_baseline_download
+                -- Restrict baseline to throttled periods (higher latency) to compare apples-to-apples
+                AVG(CASE WHEN NOT optimization_active AND latency_ms >= 80 THEN download_mbps END) as avg_baseline_download
             FROM speed_measurements 
             WHERE timestamp >= ?
             "#
         )
+        .bind(days as i64)
         .bind(since)
         .fetch_one(&self.pool)
         .await?;

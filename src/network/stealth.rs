@@ -438,13 +438,14 @@ impl StealthEngine {
         // Use obfuscated headers if enabled
         let headers = self.create_obfuscated_headers().await;
         
-        // Add speedtest-specific headers
+        // Keep headers minimal and broadly accepted by public endpoints
         let mut final_headers = headers;
-        final_headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("document"));
-        final_headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("navigate"));
-        final_headers.insert("Sec-Fetch-Site", HeaderValue::from_static("none"));
-        final_headers.insert("Sec-Fetch-User", HeaderValue::from_static("?1"));
-        final_headers.insert("Upgrade-Insecure-Requests", HeaderValue::from_static("1"));
+        // Ensure a generic modern UA for public endpoints like httpbin
+        if !final_headers.contains_key(USER_AGENT) {
+            final_headers.insert(USER_AGENT, HeaderValue::from_static(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ));
+        }
 
         let mut client_builder = ClientBuilder::new()
             .timeout(Duration::from_secs(30))
