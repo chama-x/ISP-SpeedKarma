@@ -18,7 +18,8 @@ use crate::ui::tray::SystemTray;
 use crate::ui::panel::PanelInterface;
 use crate::ui::progress::start_progress_broadcaster;
 use crate::network::monitor::BackgroundMonitor;
-use crate::network::{ThroughputKeeper, SpeedtestRunner, DisguiseProxy};
+use crate::network::{ThroughputKeeper, SpeedtestRunner, DisguiseProxy, ServerPool, StealthEngine};
+use crate::data::models::StealthLevel;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::Manager;
@@ -78,16 +79,25 @@ async fn toggle_optimization(app: tauri::AppHandle) -> std::result::Result<(), S
     let state = app.state::<crate::core::app_state::SharedAppState>();
     let mut guard = state.write().await;
     guard.optimization_mode = match guard.optimization_mode { OptimizationMode::Enabled => OptimizationMode::Disabled, OptimizationMode::Disabled => OptimizationMode::Enabled };
-    // Start/stop throughput keeper for clarity, although it self-suspends when disabled
+    // Start/stop throughput keeper and stealth engine
     if let Some(keeper) = app.try_state::<std::sync::Arc<ThroughputKeeper>>() {
         match guard.optimization_mode {
             OptimizationMode::Enabled => {
                 // Restart loop if not running
                 let k = std::sync::Arc::clone(&keeper);
                 k.start();
+                if let Some(stealth) = app.try_state::<std::sync::Arc<StealthEngine>>() {
+                    let s = std::sync::Arc::clone(&stealth);
+                    // Best-effort start; then spawn loop
+                    let _ = s.start().await;
+                    tokio::spawn(async move { s.run_stealth_loop().await; });
+                }
             }
             OptimizationMode::Disabled => {
                 keeper.stop().await;
+                if let Some(stealth) = app.try_state::<std::sync::Arc<StealthEngine>>() {
+                    let _ = stealth.stop().await;
+                }
             }
         }
     }
@@ -277,6 +287,43 @@ async fn initialize_application(app_handle: tauri::AppHandle) -> Result<()> {
             }
         });
     }
+
+    // Initialize and load Speedtest server pool
+    let mut server_pool_local = ServerPool::new()?;
+    // Load servers and persist a subset for reuse
+    if let Err(e) = server_pool_local.load_servers().await {
+        tracing::warn!("Failed to load speedtest servers: {}", e);
+    } else {
+        // Persist closest servers (up to 20)
+        let closest = server_pool_local.get_closest_servers(20);
+        for s in closest {
+            let _ = repository.save_speedtest_server(s).await;
+        }
+    }
+    let server_pool: std::sync::Arc<ServerPool> = std::sync::Arc::new(server_pool_local);
+
+    // Establish a small connection pool and monitor
+    {
+        let pool_for_conn = std::sync::Arc::clone(&server_pool);
+        tokio::spawn(async move {
+            let _ = pool_for_conn.establish_connection_pool(5).await;
+            loop {
+                let _ = pool_for_conn.monitor_connections().await;
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            }
+        });
+    }
+
+    // Create stealth engine (not running until optimization enabled)
+    let stealth_level = match repository.get_best_optimization_strategy().await {
+        Ok(Some(s)) => s.stealth_level,
+        _ => StealthLevel::Medium,
+    };
+    let stealth_engine = std::sync::Arc::new(StealthEngine::new(std::sync::Arc::clone(&server_pool), stealth_level));
+
+    // Store shared components in app state
+    app_handle.manage(std::sync::Arc::clone(&server_pool));
+    app_handle.manage(std::sync::Arc::clone(&stealth_engine));
 
     // Start decision engine in background
     let repo_for_task = Arc::clone(&repository);

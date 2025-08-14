@@ -92,7 +92,7 @@ impl ThroughputKeeper {
         let max_size = *sizes.last().unwrap_or(&256);
         match cadence {
             KeeperCadence::Warmup => min_size.max(64),
-            KeeperCadence::Recovery => (last_size * 2).min(max_size),
+            KeeperCadence::Recovery => (last_size.saturating_mul(2)).min(max_size),
             KeeperCadence::Steady => last_size,
             KeeperCadence::Suspended => 0,
         }
@@ -150,34 +150,38 @@ impl ThroughputKeeper {
     }
 
     async fn perform_burst(&self, size_kb: u32, stealth_level: &StealthLevel) -> Result<()> {
-        let url = match self.pick_target_url(stealth_level).await { Some(u) => u, None => return Ok(()) };
-        let mut headers = Self::build_headers();
-        // Randomize Range header, mimic partial GET/HEAD
-        let size_bytes = (size_kb as u64) * 1024;
-        let start = (Utc::now().timestamp_nanos_opt().unwrap_or(0) as u64) % 2048u64;
-        let end = start + size_bytes.saturating_sub(1);
-        let range_val = format!("bytes={}-{}", start, end);
-        headers.insert(RANGE, HeaderValue::from_str(&range_val).unwrap_or(HeaderValue::from_static("bytes=0-1023")));
+        // Build a small set of parallel targets
+        let mut urls = Vec::new();
+        if let Ok(servers) = self.repository.get_active_speedtest_servers().await {
+            for s in servers.into_iter().take(3) {
+                let scheme = if matches!(stealth_level, StealthLevel::Maximum) { "https" } else { "http" };
+                let nonce = (Utc::now().timestamp_millis() as u64) & 0xFFFF_FFFF;
+                urls.push(format!("{}://{}:{}/download?nocache={}", scheme, s.host, s.port, nonce));
+            }
+        }
+        if urls.is_empty() {
+            urls.push("https://speed.cloudflare.com/__down?bytes=262144".to_string());
+        }
 
         let client = reqwest::Client::builder()
             .http2_prior_knowledge()
             .pool_idle_timeout(Duration::from_secs(30))
             .build()?;
 
-        // Randomly pick method (compute randomness in a local scope to avoid non-Send across await)
-        let head_first = {
-            let mut rng = rand::thread_rng();
-            rng.gen_bool(0.4)
-        };
-        if head_first {
-            let _ = client.head(&url).headers(headers.clone()).send().await;
-            let pause_ms: u64 = {
-                let mut rng = rand::thread_rng();
-                rng.gen_range(20..80)
-            };
-            sleep(Duration::from_millis(pause_ms)).await;
+        let size_bytes = (size_kb as u64) * 1024;
+        let mut tasks = Vec::new();
+        for u in urls {
+            let mut headers = Self::build_headers();
+            let start = (Utc::now().timestamp_nanos_opt().unwrap_or(0) as u64) % 8192u64;
+            let end = start + size_bytes.saturating_sub(1);
+            let range_val = format!("bytes={}-{}", start, end);
+            headers.insert(RANGE, HeaderValue::from_str(&range_val).unwrap_or(HeaderValue::from_static("bytes=0-1023")));
+            let client_cl = client.clone();
+            tasks.push(tokio::spawn(async move {
+                let _ = client_cl.get(&u).headers(headers).send().await;
+            }));
         }
-        let _ = client.get(&url).headers(headers).send().await;
+        for t in tasks { let _ = t.await; }
         Ok(())
     }
 

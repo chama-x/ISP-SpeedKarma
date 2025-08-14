@@ -536,11 +536,11 @@ impl DefaultIntelligenceCore {
 
     /// Calculate overall analysis confidence
     fn calculate_analysis_confidence(&self, measurements: &[SpeedMeasurement], effectiveness: &EffectivenessMetrics) -> f64 {
-        let data_confidence = (measurements.len() as f64 / 500.0).min(1.0) * 0.4;
+        let data_confidence = (measurements.len() as f64 / 500.0).min(1.0) * 0.5;
         let effectiveness_confidence = effectiveness.confidence * 0.4;
-        let model_confidence = self.learning_model.model_confidence * 0.2;
+        let model_confidence = self.learning_model.model_confidence * 0.1;
 
-        data_confidence + effectiveness_confidence + model_confidence
+        (data_confidence + effectiveness_confidence + model_confidence).min(1.0)
     }
 
     /// Advanced pattern learning with statistical analysis
@@ -651,18 +651,15 @@ impl DefaultIntelligenceCore {
 
                 // Determine optimal stealth level based on ISP characteristics and effectiveness
                 let optimal_stealth = if isp_profile.is_known_throttling_isp() {
-                    if avg_effectiveness > 0.8 {
-                        StealthLevel::High
-                    } else {
-                        StealthLevel::Maximum
-                    }
+                    // Prefer High for known throttling ISPs; only escalate to Maximum on very high risk
+                    if avg_effectiveness < 0.4 { StealthLevel::Maximum } else { StealthLevel::High }
                 } else {
                     StealthLevel::Medium
                 };
 
                 // Calculate detection risk based on effectiveness patterns
                 let detection_risk = if avg_effectiveness < 0.5 {
-                    0.9 // High risk if effectiveness is dropping
+                    0.8 // High risk if effectiveness is dropping
                 } else if isp_profile.is_known_throttling_isp() {
                     0.6
                 } else {
@@ -800,7 +797,8 @@ impl DefaultIntelligenceCore {
         for (hour, scores) in hourly_performance {
             if scores.len() >= 3 {
                 let avg_score = scores.iter().sum::<f64>() / scores.len() as f64;
-                self.learning_model.temporal_weights.insert(hour, avg_score);
+                let penalty = if (19..=22).contains(&hour) { 0.1 } else { 0.0 };
+                self.learning_model.temporal_weights.insert(hour, (avg_score - penalty).max(0.0));
             }
         }
         

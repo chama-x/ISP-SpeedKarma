@@ -1,3 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SpeedKarma Advanced</title>
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 16px; }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      .row { margin: 10px 0; }
+      input, textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
+      button { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #f8f8f8; cursor: pointer; }
+      button:hover { background: #f1f1f1; }
+    </style>
+  </head>
+  <body>
+    <h1>Advanced Settings</h1>
+    <div class="row"><label>Min data days <input id="minDays" type="number" min="1" max="60" value="7" /></label></div>
+    <div class="row"><label>Custom servers (one per line)<br/><textarea id="servers" rows="6" placeholder="host:port"></textarea></label></div>
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="export">Export</button>
+      <button id="import">Import</button>
+    </div>
+    <script>
+      async function invoke(cmd, args) { return await window.__TAURI__.invoke(cmd, args); }
+      (async () => {
+        try {
+          const cfg = await invoke('get_config');
+          document.getElementById('minDays').value = cfg.auto_optimization.min_data_days || 7;
+          (cfg.advanced.custom_servers||[]);
+          document.getElementById('servers').value = (cfg.advanced.custom_servers||[]).join('\n');
+        } catch (e) { console.error(e); }
+      })();
+      document.getElementById('save').onclick = async () => {
+        try { await invoke('set_min_data_days', { days: Number(document.getElementById('minDays').value) });
+          const lines = document.getElementById('servers').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+          await invoke('set_custom_servers', { servers: lines });
+        } catch (e) { alert('Failed to save'); console.error(e); }
+      };
+      document.getElementById('export').onclick = async () => {
+        try { const json = await invoke('export_config');
+          const blob = new Blob([json], {type:'application/json'});
+          const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='speedkarma-config.json'; a.click();
+        } catch (e) { console.error(e); }
+      };
+      document.getElementById('import').onclick = async () => {
+        const input=document.createElement('input'); input.type='file'; input.accept='application/json';
+        input.onchange=async ()=>{ const f=input.files[0]; if(!f) return; const txt=await f.text(); try{ await invoke('import_config', { json: txt }); alert('Imported.'); }catch(e){ alert('Failed to import'); console.error(e); } };
+        input.click();
+      };
+    </script>
+  </body>
+  </html>
 <!DOCTYPE html>
 <html>
   <head>

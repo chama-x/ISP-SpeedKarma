@@ -151,7 +151,7 @@ impl Default for ThroughputKeeperConfig {
         Self {
             enabled: true,
             burst_interval_seconds: 5,
-            burst_sizes_kb: vec![64, 128, 256],
+            burst_sizes_kb: vec![64, 128, 256, 512, 1024, 2048],
             hourly_budget_mb: 30.0,
             tighten_threshold_drop: 0.15,
             relax_threshold_stability_s: 60,

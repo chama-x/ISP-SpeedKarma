@@ -1,3 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ISP‑SpeedKarma</title>
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px; color: #111; }
+      .container { max-width: 640px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      p { margin: 0 0 12px; color: #444; }
+      code { background: #f2f2f2; padding: 2px 6px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>ISP‑SpeedKarma</h1>
+      <p>Running in the background. Use the menu bar icon to control optimization and open the Advanced panel.</p>
+      <p>Events from the engine will appear in your tray. This window is optional.</p>
+    </div>
+    <script>
+      // Optional: listen to simple events for debugging
+      if (window.__TAURI__) {
+        const { event } = window.__TAURI__;
+        event.listen('speedtest_progress', (e) => console.log('speedtest_progress', e.payload));
+        event.listen('optimization_progress', (e) => console.log('optimization_progress', e.payload));
+      }
+    </script>
+  </body>
+  </html>
 <!DOCTYPE html>
 <html>
   <head>

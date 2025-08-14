@@ -48,6 +48,28 @@ Build app bundle:
 cargo tauri build
 ```
 
+### macOS signing & notarization (distribution)
+To avoid the “App is damaged and can’t be opened” warning on other Macs, distribute a signed and notarized build:
+
+1. Prereqs: Developer ID cert, Apple ID with app-specific password, Team ID.
+2. Ensure `tauri.conf.json` has hardened runtime and entitlements configured (already added).
+3. Set environment variables before building:
+```bash
+export APPLE_ID="your@appleid.com"
+export APPLE_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="YOURTEAMID"
+export TAURI_PRIVATE_KEY="<optional if using TAURI code signing>"
+```
+4. Build signed & submit for notarization (Tauri CLI will use your env):
+```bash
+cargo tauri build
+```
+5. After build, staple the notarization ticket (if not already stapled):
+```bash
+xcrun stapler staple "src-tauri/target/release/bundle/macos/ISP-SpeedKarma.app"
+```
+Distribute the resulting `.dmg` under `src-tauri/target/release/bundle/dmg/`.
+
 
 ## The UI in 10 seconds
 - Toggle tile: enable/disable optimization. It stays locked while we’re learning.

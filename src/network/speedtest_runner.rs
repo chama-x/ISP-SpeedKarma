@@ -2,11 +2,12 @@ use crate::core::app_state::{OptimizationMode, SharedAppState};
 use crate::core::config::SpeedtestRunnerConfig;
 use crate::core::error::Result;
 use crate::data::repository::Repository;
-use crate::data::models::StealthLevel;
+use crate::data::models::{StealthLevel, SpeedMeasurement};
 use chrono::Utc;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT, ACCEPT, ACCEPT_LANGUAGE, ACCEPT_ENCODING, CACHE_CONTROL, CONNECTION};
 use serde::Serialize;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tokio::time::{sleep, timeout};
@@ -68,12 +69,15 @@ impl SpeedtestRunner {
 
         // Download phase: open parallel streams and fully read bodies until time expires
         let dl_secs = self.config.download_duration_s.max(1);
-        let end_time = std::time::Instant::now() + Duration::from_secs(dl_secs as u64);
+        let dl_start = std::time::Instant::now();
+        let end_time = dl_start + Duration::from_secs(dl_secs as u64);
         let is_cloudflare = base.contains("speed.cloudflare.com");
         let mut tasks = Vec::new();
+        let dl_bytes = Arc::new(AtomicU64::new(0));
         for i in 0..self.config.parallel_connections.max(1) as usize {
             let client_cl = client.clone();
             let base_cl = base.clone();
+            let dl_bytes_cl = Arc::clone(&dl_bytes);
             tasks.push(tokio::spawn(async move {
                 let mut seed: u64 = i as u64 + 1;
                 while std::time::Instant::now() < end_time {
@@ -83,7 +87,9 @@ impl SpeedtestRunner {
                         format!("{}speedtest/random4000x4000.jpg?r={}", base_cl, seed)
                     };
                     if let Ok(resp) = client_cl.get(&url).send().await {
-                        let _ = resp.bytes().await; // fully consume to pull bandwidth
+                        if let Ok(bytes) = resp.bytes().await {
+                            dl_bytes_cl.fetch_add(bytes.len() as u64, Ordering::Relaxed);
+                        }
                     }
                     seed = seed.wrapping_add(1);
                 }
@@ -98,19 +104,26 @@ impl SpeedtestRunner {
             sleep(Duration::from_millis(300)).await;
         }
         for t in tasks { let _ = t.await; }
+        let dl_elapsed_s = dl_start.elapsed().as_secs_f64().max(0.001);
+        let down_mbps = (dl_bytes.load(Ordering::Relaxed) as f64 * 8.0) / (dl_elapsed_s * 1_000_000.0);
 
         // Upload phase: push random data to upload endpoints
         let ul_secs = self.config.upload_duration_s.max(1);
         let start_ul = std::time::Instant::now();
         let mut tasks_ul = Vec::new();
+        let ul_bytes = Arc::new(AtomicU64::new(0));
         for _i in 0..self.config.parallel_connections.max(1) as usize {
             let url = if is_cloudflare { format!("{}__up", base) } else { format!("{}speedtest/upload.php", base) };
             let body = vec![0u8; 2_000_000]; // ~2MB per request, repeated
             let client_cl = client.clone();
+            let ul_bytes_cl = Arc::clone(&ul_bytes);
+            let body_len = body.len();
             tasks_ul.push(tokio::spawn(async move {
                 let _ = timeout(Duration::from_secs(ul_secs as u64), async {
                     loop {
-                        let _ = client_cl.post(&url).body(body.clone()).send().await;
+                        if client_cl.post(&url).body(body.clone()).send().await.is_ok() {
+                            ul_bytes_cl.fetch_add(body_len as u64, Ordering::Relaxed);
+                        }
                     }
                 }).await;
             }));
@@ -122,8 +135,14 @@ impl SpeedtestRunner {
             sleep(Duration::from_millis(300)).await;
         }
         for t in tasks_ul { let _ = t.await; }
+        let ul_elapsed_s = start_ul.elapsed().as_secs_f64().max(0.001);
+        let up_mbps = (ul_bytes.load(Ordering::Relaxed) as f64 * 8.0) / (ul_elapsed_s * 1_000_000.0);
 
-        let _ = self.app.emit_all("speedtest_progress", SpeedtestProgressPayload { phase: "done".into(), down_mbps: 0.0, up_mbps: 0.0, elapsed_s: (dl_secs+ul_secs) });
+        // Persist measurement for intelligence engine
+        let measurement = SpeedMeasurement::new(down_mbps, up_mbps, 0, true);
+        let _ = self.repository.save_speed_measurement(&measurement).await;
+
+        let _ = self.app.emit_all("speedtest_progress", SpeedtestProgressPayload { phase: "done".into(), down_mbps: down_mbps, up_mbps: up_mbps, elapsed_s: (dl_secs+ul_secs) });
         Ok(())
     }
 }

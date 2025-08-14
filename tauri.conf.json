@@ -55,7 +55,11 @@
         "icons/Icon.iconset/icon_256x256@2x.png",
         "icons/Icon.iconset/icon_512x512.png",
         "icons/Icon.iconset/icon_512x512@2x.png"
-      ]
+      ],
+      "macOS": {
+        "hardenedRuntime": true,
+        "entitlements": "entitlements.plist"
+      }
     },
     "systemTray": {
       "iconPath": "icons/32x32.png",

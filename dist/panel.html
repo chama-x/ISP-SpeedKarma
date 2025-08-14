@@ -1,3 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SpeedKarma Panel</title>
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #111; }
+      .panel { width: 420px; height: 420px; box-sizing: border-box; padding: 16px; }
+      .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; }
+      .title { font-weight: 600; font-size: 14px; }
+      .value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #f8f8f8; cursor: pointer; }
+      .btn:hover { background: #f1f1f1; }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <div class="row"><div class="title">Optimization</div><div><button id="toggle" class="btn">Toggle</button></div></div>
+      <div class="row"><div class="title">Mode</div><div id="mode" class="value">-</div></div>
+      <div class="row"><div class="title">Status</div><div id="status" class="value">-</div></div>
+      <div class="row"><div class="title">Down/Up</div><div id="du" class="value">-</div></div>
+      <div class="row"><div class="title">Next rotation</div><div id="rot" class="value">-</div></div>
+    </div>
+    <script>
+      async function invoke(cmd, args) { return await window.__TAURI__.invoke(cmd, args); }
+      document.getElementById('toggle').onclick = async () => { try { await invoke('toggle_optimization'); } catch (e) { console.error(e); } };
+      window.__TAURI__.event.listen('optimization_progress', (e) => {
+        const p = e.payload; if (!p) return;
+        document.getElementById('status').textContent = p.phase;
+        document.getElementById('du').textContent = `${p.metrics.down_mbps.toFixed(1)} / ${p.metrics.up_mbps.toFixed(1)} Mbps`;
+        document.getElementById('rot').textContent = `${p.next_rotation_s}s`;
+      });
+      (async () => {
+        try { const st = await invoke('get_optimization_state'); document.getElementById('mode').textContent = st.mode; } catch {}
+      })();
+    </script>
+  </body>
+  </html>
 <!DOCTYPE html>
 <html>
   <head>

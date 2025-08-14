@@ -1,4 +1,10 @@
+use crate::core::app_state::{OptimizationMode, SharedAppState};
 use crate::core::error::Result;
+use crate::data::repository::Repository;
+use crate::network::keeper::ThroughputKeeper;
+use crate::network::stealth::StealthEngine;
+use chrono::Utc;
+use std::sync::Arc;
 
 /// Network optimization engine interface
 pub trait NetworkOptimizer {
@@ -35,40 +41,70 @@ pub struct NetworkConditions {
 
 /// Default network optimizer implementation
 pub struct DefaultNetworkOptimizer {
-    // TODO: Implementation will be added in subsequent tasks
+    repository: Arc<Repository>,
+    shared_state: SharedAppState,
+    keeper: Arc<ThroughputKeeper>,
+    stealth: Arc<StealthEngine>,
 }
 
 impl DefaultNetworkOptimizer {
-    pub fn new() -> Self {
-        Self {
-            // TODO: Initialize optimizer components
-        }
+    pub fn new(
+        repository: Arc<Repository>,
+        shared_state: SharedAppState,
+        keeper: Arc<ThroughputKeeper>,
+        stealth: Arc<StealthEngine>,
+    ) -> Self {
+        Self { repository, shared_state, keeper, stealth }
     }
 }
 
 impl NetworkOptimizer for DefaultNetworkOptimizer {
     async fn start_optimization(&self) -> Result<()> {
-        // TODO: Implement optimization startup in task 4
+        {
+            let mut s = self.shared_state.write().await;
+            s.optimization_mode = OptimizationMode::Enabled;
+        }
+        // Start background keeper loop
+        self.keeper.clone().start();
+        // Start stealth and loop
+        let stealth = self.stealth.clone();
+        stealth.start().await?;
+        tokio::spawn(async move { stealth.run_stealth_loop().await; });
         Ok(())
     }
     
     async fn stop_optimization(&self) -> Result<()> {
-        // TODO: Implement optimization shutdown
+        {
+            let mut s = self.shared_state.write().await;
+            s.optimization_mode = OptimizationMode::Disabled;
+        }
+        self.keeper.stop().await;
+        let _ = self.stealth.stop().await;
         Ok(())
     }
     
     async fn get_effectiveness(&self) -> Result<EffectivenessMetrics> {
-        // TODO: Implement effectiveness calculation
+        let since = Utc::now() - chrono::Duration::hours(6);
+        let measurements = self.repository.get_speed_measurements_since(since).await?;
+        let (mut base_sum, mut base_n, mut opt_sum, mut opt_n) = (0.0, 0u32, 0.0, 0u32);
+        for m in measurements {
+            if m.optimization_active { opt_sum += m.download_mbps; opt_n += 1; }
+            else { base_sum += m.download_mbps; base_n += 1; }
+        }
+        let baseline = if base_n > 0 { base_sum / base_n as f64 } else { 0.0 };
+        let optimized = if opt_n > 0 { opt_sum / opt_n as f64 } else { 0.0 };
+        let improvement = if baseline > 0.0 && optimized > 0.0 { optimized / baseline } else { 1.0 };
+        let confidence = ((opt_n + base_n) as f64 / 100.0).min(1.0);
         Ok(EffectivenessMetrics {
-            improvement_factor: 1.0,
-            baseline_speed: 0.0,
-            optimized_speed: 0.0,
-            confidence: 0.0,
+            improvement_factor: improvement,
+            baseline_speed: baseline,
+            optimized_speed: optimized,
+            confidence,
         })
     }
     
     async fn adapt_to_conditions(&self, _conditions: NetworkConditions) -> Result<()> {
-        // TODO: Implement adaptive optimization
+        // Placeholder: hook for dynamic adjustments
         Ok(())
     }
 }
