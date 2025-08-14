@@ -1,8 +1,12 @@
 use crate::core::error::{Result, SpeedKarmaError};
 use crate::core::intelligence::{SystemStatus, SystemState};
-use crate::core::app_state::{OptimizationMode};
-use crate::ui::advanced::AdvancedInterface;
+use crate::core::app_state::{OptimizationMode, SharedAppState};
+use crate::core::config::AppConfig;
+use crate::data::repository::Repository;
+use crate::network::speedtest_runner::SpeedtestRunner;
+// (no direct dependency on event payload types; tray receives distilled values)
 use crate::ui::panel::PanelInterface;
+use crate::ui::status::{format_menu_item_text, format_tooltip_text};
 use tauri::{
     AppHandle, CustomMenuItem, Manager, SystemTray as TauriSystemTray, 
     SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
@@ -19,13 +23,13 @@ pub struct SystemTray {
     menu_items: SystemTrayMenuItems,
 }
 
-/// Menu item identifiers for system tray
+/// Menu item identifiers for system tray (minimal native menu)
 #[derive(Debug)]
 struct SystemTrayMenuItems {
     status_item: String,
     separator1: String,
     toggle_optimization: String,
-    advanced: String,
+    run_speedtest: String,
     separator2: String,
     quit: String,
 }
@@ -36,7 +40,7 @@ impl Default for SystemTrayMenuItems {
             status_item: "status".to_string(),
             separator1: "sep1".to_string(),
             toggle_optimization: "toggle_opt".to_string(),
-            advanced: "advanced".to_string(),
+            run_speedtest: "run_speedtest".to_string(),
             separator2: "sep2".to_string(),
             quit: "quit".to_string(),
         }
@@ -61,21 +65,20 @@ impl SystemTray {
     pub fn create_tray_menu() -> TauriSystemTray {
         let menu_items = SystemTrayMenuItems::default();
         
-        // Create menu items with Apple-inspired design
+        // Create menu items (minimal)
         let status_item = CustomMenuItem::new(&menu_items.status_item, "◉ SpeedKarma")
             .disabled(); // Status item is non-clickable
         
         let toggle_optimization = CustomMenuItem::new(&menu_items.toggle_optimization, "Enable Optimization");
-        let advanced = CustomMenuItem::new(&menu_items.advanced, "Advanced...");
+        let run_speedtest = CustomMenuItem::new(&menu_items.run_speedtest, "Run Speedtest Now");
         let quit = CustomMenuItem::new(&menu_items.quit, "Quit SpeedKarma");
         
-        // Build menu with progressive disclosure
+        // Build minimal menu
         let tray_menu = SystemTrayMenu::new()
             .add_item(status_item)
             .add_native_item(SystemTrayMenuItem::Separator)
             .add_item(toggle_optimization)
-            .add_native_item(SystemTrayMenuItem::Separator)
-            .add_item(advanced)
+            .add_item(run_speedtest)
             .add_native_item(SystemTrayMenuItem::Separator)
             .add_item(quit);
         
@@ -105,7 +108,7 @@ impl SystemTray {
         *self.current_status.write().await = status.clone();
         
         // Update tray tooltip
-        let tooltip = self.format_tooltip(&status);
+        let tooltip = format_tooltip_text(&status);
         self.update_tray_tooltip(&tooltip).await?;
         
         // Update menu items based on status
@@ -153,7 +156,7 @@ impl SystemTray {
             let tray_handle = app_handle.tray_handle();
             
             // Update status item text
-            let status_text = self.format_status_menu_item(status);
+            let status_text = format_menu_item_text(status);
             tray_handle.get_item(&self.menu_items.status_item)
                 .set_title(&status_text)
                 .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to update status item: {}", e)))?;
@@ -193,59 +196,7 @@ impl SystemTray {
         Ok(())
     }
     
-    /// Formats the status for the menu item following Apple's design language
-    fn format_status_menu_item(&self, status: &SystemStatus) -> String {
-        match status.state {
-            SystemState::Learning => {
-                if let Some(progress) = &status.data_collection_progress {
-                    format!(
-                        "◉ SpeedKarma — Learning patterns ({} of {} days)",
-                        progress.days_collected, progress.days_needed
-                    )
-                } else {
-                    "◉ SpeedKarma — Learning patterns".to_string()
-                }
-            }
-            SystemState::Optimizing => {
-                if let Some(effectiveness) = &status.effectiveness {
-                    format!(
-                        "◉ SpeedKarma — Optimizing ({}x)",
-                        effectiveness.improvement_factor
-                    )
-                } else {
-                    "◉ SpeedKarma — Optimizing".to_string()
-                }
-            }
-            SystemState::Monitoring => "◉ SpeedKarma — Monitoring".to_string(),
-            SystemState::Inactive => "◉ SpeedKarma — Inactive".to_string(),
-            SystemState::Error(ref err) => format!("◉ SpeedKarma — Error: {}", err),
-        }
-    }
-    
-    /// Formats the tooltip text
-    fn format_tooltip(&self, status: &SystemStatus) -> String {
-        match status.state {
-            SystemState::Learning => {
-                if let Some(progress) = &status.data_collection_progress {
-                    format!("SpeedKarma - Learning patterns ({:.0}% complete)", 
-                           progress.progress_percentage)
-                } else {
-                    "SpeedKarma - Learning network patterns".to_string()
-                }
-            }
-            SystemState::Optimizing => {
-                if let Some(effectiveness) = &status.effectiveness {
-                    format!("SpeedKarma - Optimizing ({}x improvement)", 
-                           effectiveness.improvement_factor)
-                } else {
-                    "SpeedKarma - Optimizing network".to_string()
-                }
-            }
-            SystemState::Monitoring => "SpeedKarma - Monitoring network".to_string(),
-            SystemState::Inactive => "SpeedKarma - Inactive".to_string(),
-            SystemState::Error(ref err) => format!("SpeedKarma - Error: {}", err),
-        }
-    }
+    // formatting helpers moved to `ui::status`
     
     /// Shows notification to user following Apple's notification guidelines
     pub async fn show_notification(&self, title: &str, message: &str) -> Result<()> {
@@ -285,8 +236,7 @@ impl SystemTray {
                 // Right click shows context menu (handled automatically)
             }
             SystemTrayEvent::DoubleClick { position: _, size: _, .. } => {
-                debug!("Tray double-clicked - toggling main window");
-                self.toggle_main_window().await?;
+                debug!("Tray double-clicked");
             }
             SystemTrayEvent::MenuItemClick { id, .. } => {
                 debug!("Menu item clicked: {}", id);
@@ -299,23 +249,7 @@ impl SystemTray {
         Ok(())
     }
     
-    /// Toggles the main window visibility
-    async fn toggle_main_window(&self) -> Result<()> {
-        if let Some(app_handle) = &self.app_handle {
-            if let Some(window) = app_handle.get_window("main") {
-                if window.is_visible().unwrap_or(false) {
-                    window.hide()
-                        .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to hide window: {}", e)))?;
-                } else {
-                    window.show()
-                        .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to show window: {}", e)))?;
-                    window.set_focus()
-                        .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to focus window: {}", e)))?;
-                }
-            }
-        }
-        Ok(())
-    }
+    // No main window management in tray-only mode
     
     /// Handles menu item clicks
     async fn handle_menu_click(&self, item_id: &str) -> Result<()> {
@@ -324,10 +258,17 @@ impl SystemTray {
                 info!("Optimization toggle clicked");
                 self.handle_optimization_toggle().await?;
             }
-            id if id == self.menu_items.advanced => {
-                info!("Advanced settings clicked");
-                self.show_advanced_interface().await?;
+            id if id == self.menu_items.run_speedtest => {
+                info!("Run Speedtest Now clicked");
+                if let Some(app_handle) = &self.app_handle {
+                    let repo = app_handle.state::<Arc<Repository>>();
+                    let shared = app_handle.state::<SharedAppState>();
+                    let cfg = AppConfig::load().await? .advanced.speedtest_runner;
+                    let runner = SpeedtestRunner::new(app_handle.clone(), Arc::clone(&repo), Arc::clone(&shared), cfg);
+                    tokio::spawn(async move { let _ = runner.run_once().await; });
+                }
             }
+            // Advanced menu removed
             id if id == self.menu_items.quit => {
                 info!("Quit clicked");
                 self.handle_quit().await?;
@@ -338,6 +279,8 @@ impl SystemTray {
         }
         Ok(())
     }
+
+    // Live metrics and keeper rows removed from native menu
     
     /// Handles optimization toggle
     async fn handle_optimization_toggle(&self) -> Result<()> {
@@ -375,21 +318,7 @@ impl SystemTray {
         Ok(())
     }
     
-    /// Shows the advanced interface
-    pub async fn show_advanced_interface(&self) -> Result<()> {
-        info!("Showing advanced interface");
-        
-        if let Some(app_handle) = &self.app_handle {
-            let advanced = AdvancedInterface::new();
-            // Ignore errors beyond notification; we already log them
-            if let Err(e) = advanced.show(app_handle).await {
-                warn!("Failed to open advanced interface: {}", e);
-                self.show_notification("SpeedKarma", "Unable to open Advanced settings").await?;
-            }
-        }
-        
-        Ok(())
-    }
+    // Advanced interface removed in tray-only mode
     
     /// Handles application quit
     async fn handle_quit(&self) -> Result<()> {

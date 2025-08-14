@@ -58,7 +58,8 @@
       ],
       "macOS": {
         "hardenedRuntime": true,
-        "entitlements": "entitlements.plist"
+        "entitlements": "entitlements.plist",
+        "signingIdentity": "-"
       }
     },
     "systemTray": {
@@ -69,15 +70,6 @@
     "security": {
       "csp": null
     },
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "ISP-SpeedKarma",
-        "width": 520,
-        "height": 600,
-        "visible": true
-      }
-    ]
+    "windows": []
   }
 }

@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
+use crate::ui::tray::SystemTray;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::{info, warn, debug, error};
@@ -316,6 +317,8 @@ impl ThroughputKeeper {
             cadence: match cadence { KeeperCadence::Warmup => "warmup", KeeperCadence::Steady => "steady", KeeperCadence::Recovery => "recovery", KeeperCadence::Suspended => "suspended" }.to_string(),
         };
         let _ = self.app_handle.emit_all("keeper_progress", payload);
+
+        // Native tray keeper row removed; HTML popover shows cadence details
     }
 }
 

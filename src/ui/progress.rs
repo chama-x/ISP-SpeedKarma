@@ -1,6 +1,7 @@
 use crate::core::app_state::{OptimizationMode, SharedAppState};
 use crate::core::error::Result;
 use crate::data::repository::Repository;
+use crate::ui::tray::SystemTray;
 use chrono::{Utc, Duration as ChronoDuration};
 use serde::Serialize;
 use std::sync::Arc;
@@ -73,19 +74,18 @@ pub fn start_progress_broadcaster(
 
             if !enabled {
                 since_enabled = None;
-                // Emit inactive state so UI can hide spinners
-                let _ = app_handle.emit_all(
-                    "optimization_progress",
-                    OptimizationProgressPayload {
-                        phase: ProgressPhase::Inactive,
-                        phase_percent: 0,
-                        server: ServerInfo { host: "".into(), region: "".into(), ip: None, stealth_level: None },
-                        metrics: LiveMetrics { down_mbps: 0.0, up_mbps: 0.0, latency_ms: 0, improvement: 1.0 },
-                        next_rotation_s: 0,
-                        confidence: 0.0,
-                        timestamp: Utc::now().to_rfc3339(),
-                    },
-                );
+            // Emit inactive state
+            let payload = OptimizationProgressPayload {
+                phase: ProgressPhase::Inactive,
+                phase_percent: 0,
+                server: ServerInfo { host: "".into(), region: "".into(), ip: None, stealth_level: None },
+                metrics: LiveMetrics { down_mbps: 0.0, up_mbps: 0.0, latency_ms: 0, improvement: 1.0 },
+                next_rotation_s: 0,
+                confidence: 0.0,
+                timestamp: Utc::now().to_rfc3339(),
+            };
+            let _ = app_handle.emit_all("optimization_progress", payload.clone());
+            // Native tray metrics row removed; HTML popover shows live metrics
                 continue;
             }
 
@@ -141,6 +141,8 @@ pub fn start_progress_broadcaster(
             };
 
             let _ = app_handle.emit_all("optimization_progress", payload);
+
+            // Native tray metrics row removed; HTML popover shows live metrics
         }
     });
 }

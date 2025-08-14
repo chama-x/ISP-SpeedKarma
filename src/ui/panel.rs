@@ -62,6 +62,18 @@ impl PanelInterface {
         Ok(())
     }
 
+    /// Show the panel (without repositioning) and focus it
+    pub fn show(app_handle: &AppHandle) -> Result<()> {
+        let window = Self::ensure_panel(app_handle)?;
+        window
+            .show()
+            .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to show panel: {}", e)))?;
+        window
+            .set_focus()
+            .map_err(|e| SpeedKarmaError::SystemError(format!("Failed to focus panel: {}", e)))?;
+        Ok(())
+    }
+
     /// Toggle visibility; if visible hide, else show near a position
     pub fn toggle_at_tray_position(app_handle: &AppHandle, position_x: f64, position_y: f64) -> Result<()> {
         let window = Self::ensure_panel(app_handle)?;

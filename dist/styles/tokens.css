@@ -1,13 +1,14 @@
 :root {
   color-scheme: light dark;
-  --font-sans: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-sans: Inter, -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  /* Accent (teal by default; tuned for macOS look) */
-  --accent-h: 162;
-  --accent-s: 68%;
-  --accent-l: 48%;
+  /* Tesla-inspired accent: rich red */
+  --accent-h: 357;
+  --accent-s: 86%;
+  --accent-l: 52%;
   --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
-  --accent-weak: hsla(var(--accent-h), calc(var(--accent-s) - 20%), calc(var(--accent-l) + 12%), 0.28);
+  --accent-weak: hsla(var(--accent-h), calc(var(--accent-s) - 20%), calc(var(--accent-l) + 10%), 0.20);
 
   /* Radii */
   --radius-10: 10px;
@@ -30,25 +31,38 @@
   /* Shadows */
   --shadow-1: 0 8px 24px rgba(0,0,0,.18);
   --shadow-2: 0 20px 44px rgba(0,0,0,.28);
+  --hairline: 1px;
 
   /* Surfaces (dark defaults) */
-  --bg: #0f0f10;
-  --surface: rgba(30, 30, 32, 0.72);
-  --surface-2: rgba(38, 38, 40, 0.64);
+  --bg: #140507;
+  --surface: rgba(16, 16, 18, 0.72);
+  --surface-2: rgba(20, 20, 22, 0.64);
   --border: rgba(255,255,255,.08);
-  --text: #eaeaea;
-  --muted: #9a9aa1;
+  --text: #f1f3f5;
+  --muted: #9aa3ad;
+
+  /* Decorative background for tray popover */
+  --bg-gradient: radial-gradient(600px 600px at -10% -10%, rgba(172,7,18,0.35), transparent 50%),
+                  radial-gradient(700px 700px at 110% 110%, rgba(172,7,18,0.25), transparent 50%),
+                  var(--bg);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-med: 160ms;
+  --dur-toggle: 220ms;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f6f7f9;
-    --surface: rgba(255,255,255,0.78);
-    --surface-2: rgba(255,255,255,0.64);
-    --border: rgba(0,0,0,.08);
-    --text: #0e0e10;
-    --muted: #6a6a71;
-    --accent-l: 42%;
+    --bg: #fff6f6;
+    --surface: rgba(255,255,255,0.9);
+    --surface-2: rgba(255,255,255,0.78);
+    --border: rgba(0,0,0,.06);
+    --text: #0e0f12;
+    --muted: #6b7076;
+    --accent-l: 48%;
   }
 }
 
@@ -58,6 +72,8 @@ html, body {
   font-family: var(--font-sans);
   background: transparent; /* popovers use vibrancy */
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .visually-hidden {

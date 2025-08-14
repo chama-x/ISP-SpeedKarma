@@ -56,8 +56,7 @@ impl SpeedtestRunner {
 
     pub async fn run_once(&self) -> Result<()> {
         if !self.config.enabled { return Ok(()); }
-        let enabled = { let s = self.shared.read().await; matches!(s.optimization_mode, OptimizationMode::Enabled) };
-        if !enabled { return Ok(()); }
+        // Allow manual speedtest to run regardless of optimization mode
 
         // Choose server and client
         let stealth_level = match self.repository.get_best_optimization_strategy().await {

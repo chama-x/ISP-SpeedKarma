@@ -17,7 +17,7 @@ Drop your screenshots here once you’re ready.
 
 
 ## Highlights
-- **Apple‑style tray UI**: Minimal menu with a status line, one‑click toggle, and Advanced
+- **Apple‑style tray UI**: Minimal menu with a status line and one‑click toggle
 - **Smart baseline**: learns before it optimizes — no placebo switches
 - **Speedtest runner**: parallelized up/down tests with progress events
 - **Booster/keeper**: burst pacing to maintain smoothness under caps
@@ -76,7 +76,8 @@ Distribute the resulting `.dmg` under `src-tauri/target/release/bundle/dmg/`.
 - Insights: live confidence and improvement when available.
 - Speedtest: fires a multi‑stream test; progress shows in the tile.
 - Disguise: optional — mimics speedtest‑style traffic.
-- Tray: left‑click for the popover, “Advanced…” for detailed controls.
+- Tray: left‑click for the popover; native menu is minimal (Enable/Disable, Run Speedtest, Quit).
+- Popover: Tesla/SpaceX‑inspired panel with a Mode selector (Auto/Enabled/Disabled).
 
 
 ## Attitude and respect
@@ -93,9 +94,9 @@ This app is assertive, not aggressive. It optimizes within your constraints, avo
 
 ## Development
 Repo layout (simplified):
-- `src/ui/` — tray, panel, advanced views
+- `src/ui/` — tray, panel, status helpers, progress broadcaster
 - `src/network/` — monitor, optimizer, speedtest runner, stealth
-- `dist/` — HTML/CSS for the main window
+- `dist/` — HTML/CSS for the tray popover panel
 - `tauri.conf.json` — window, tray, bundling
 
 Useful scripts:

@@ -43,3 +43,52 @@ impl StatusDisplay {
         }
     }
 }
+
+/// Formats a concise status string suitable for the native tray menu item.
+pub fn format_menu_item_text(status: &SystemStatus) -> String {
+    match status.state {
+        SystemState::Learning => {
+            if let Some(DataCollectionProgress { days_collected, days_needed, .. }) = &status.data_collection_progress {
+                format!(
+                    "◉ SpeedKarma — Learning patterns ({} of {} days)",
+                    days_collected, days_needed
+                )
+            } else {
+                "◉ SpeedKarma — Learning patterns".to_string()
+            }
+        }
+        SystemState::Optimizing => {
+            if let Some(EffectivenessMetrics { improvement_factor, .. }) = &status.effectiveness {
+                format!("◉ SpeedKarma — Optimizing ({}x)", improvement_factor)
+            } else {
+                "◉ SpeedKarma — Optimizing".to_string()
+            }
+        }
+        SystemState::Monitoring => "◉ SpeedKarma — Monitoring".to_string(),
+        SystemState::Inactive => "◉ SpeedKarma — Inactive".to_string(),
+        SystemState::Error(ref err) => format!("◉ SpeedKarma — Error: {}", err),
+    }
+}
+
+/// Formats a tooltip string for the tray icon.
+pub fn format_tooltip_text(status: &SystemStatus) -> String {
+    match status.state {
+        SystemState::Learning => {
+            if let Some(DataCollectionProgress { progress_percentage, .. }) = &status.data_collection_progress {
+                format!("SpeedKarma - Learning patterns ({:.0}% complete)", progress_percentage)
+            } else {
+                "SpeedKarma - Learning network patterns".to_string()
+            }
+        }
+        SystemState::Optimizing => {
+            if let Some(EffectivenessMetrics { improvement_factor, .. }) = &status.effectiveness {
+                format!("SpeedKarma - Optimizing ({}x improvement)", improvement_factor)
+            } else {
+                "SpeedKarma - Optimizing network".to_string()
+            }
+        }
+        SystemState::Monitoring => "SpeedKarma - Monitoring network".to_string(),
+        SystemState::Inactive => "SpeedKarma - Inactive".to_string(),
+        SystemState::Error(ref err) => format!("SpeedKarma - Error: {}", err),
+    }
+}

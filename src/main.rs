@@ -15,7 +15,6 @@ use crate::data::migrations::MigrationManager;
 use crate::data::models::OptimizationStrategy;
 use crate::data::repository::Repository;
 use crate::ui::tray::SystemTray;
-use crate::ui::panel::PanelInterface;
 use crate::ui::progress::start_progress_broadcaster;
 use crate::network::monitor::BackgroundMonitor;
 use crate::network::{ThroughputKeeper, SpeedtestRunner, DisguiseProxy, ServerPool, StealthEngine};
@@ -36,7 +35,8 @@ pub fn run() {
             toggle_optimization,
             get_optimization_state,
             get_system_status,
-            open_advanced,
+            set_optimization_mode,
+            set_auto_mode,
             quit_app,
             get_config,
             set_min_data_days,
@@ -105,6 +105,44 @@ async fn toggle_optimization(app: tauri::AppHandle) -> std::result::Result<(), S
 }
 
 #[tauri::command]
+async fn set_optimization_mode(app: tauri::AppHandle, mode: String) -> std::result::Result<(), String> {
+    use crate::network::ThroughputKeeper;
+    use crate::network::StealthEngine;
+    let state = app.state::<crate::core::app_state::SharedAppState>();
+    let mut guard = state.write().await;
+    let target = match mode.as_str() { "Enabled" => OptimizationMode::Enabled, _ => OptimizationMode::Disabled };
+    if guard.optimization_mode == target { return Ok(()); }
+    guard.optimization_mode = target;
+    if let Some(keeper) = app.try_state::<std::sync::Arc<ThroughputKeeper>>() {
+        match target {
+            OptimizationMode::Enabled => {
+                let k = std::sync::Arc::clone(&keeper);
+                k.start();
+                if let Some(stealth) = app.try_state::<std::sync::Arc<StealthEngine>>() {
+                    let s = std::sync::Arc::clone(&stealth);
+                    let _ = s.start().await;
+                    tokio::spawn(async move { s.run_stealth_loop().await; });
+                }
+            }
+            OptimizationMode::Disabled => {
+                keeper.stop().await;
+                if let Some(stealth) = app.try_state::<std::sync::Arc<StealthEngine>>() {
+                    let _ = stealth.stop().await;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn set_auto_mode(_app: tauri::AppHandle, enabled: bool) -> std::result::Result<(), String> {
+    let mut cfg = AppConfig::load().await.map_err(|e| e.to_string())?;
+    cfg.auto_optimization.enabled = enabled;
+    cfg.save().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_optimization_state(app: tauri::AppHandle) -> std::result::Result<serde_json::Value, String> {
     let state = app.state::<crate::core::app_state::SharedAppState>();
     let guard = state.read().await;
@@ -119,13 +157,7 @@ async fn get_system_status(app: tauri::AppHandle) -> std::result::Result<crate::
     Ok(tray.get_current_status().await)
 }
 
-#[tauri::command]
-async fn open_advanced(app: tauri::AppHandle) -> std::result::Result<(), String> {
-    let tray = app.state::<Arc<RwLock<SystemTray>>>();
-    let tray = tray.read().await;
-    tray.show_advanced_interface().await.map_err(|e| e.to_string())
-}
-
+// advanced window removed in tray-only mode
 #[tauri::command]
 async fn quit_app(app: tauri::AppHandle) -> std::result::Result<(), String> { app.exit(0); Ok(()) }
 
